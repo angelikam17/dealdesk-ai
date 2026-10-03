@@ -13,3 +13,7 @@ skills-lock.json
 dealdesk-ai/
 n8n/*.local.json
 .vercel
+.env*
+
+# Recorded demo videos (large; submit separately)
+demo-video/
