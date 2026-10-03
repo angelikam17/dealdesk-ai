@@ -1,0 +1,38 @@
+/* Printable deal report: summary, flags, routing, decision and audit trail. */
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #fff;
+    --surface: #fff;
+    --surface-2: #f5f6f8;
+    --text: #111827;
+    --text-2: #374151;
+    --muted: #4b5563;
+    --border: #d1d5db;
+  }
+
+  @page { margin: 14mm; }
+
+  body { background: #fff; font-size: 11pt; }
+  .no-print,
+  .topbar,
+  .skip-link,
+  .stale-banner,
+  .page-head,
+  .hitl-banner { display: none !important; }
+  .print-only { display: block; }
+
+  .page { padding: 0; max-width: none; }
+  .layout { display: block; }
+  .results { gap: 10pt; }
+  .card { box-shadow: none; break-inside: avoid; padding: 10pt 12pt; }
+  .flag, .route-card, .kpis { break-inside: avoid; }
+  .audit { max-height: none; overflow: visible; }
+  .route-foot .btn { display: none; }
+
+  .print-header { margin-bottom: 8pt; border-bottom: 2px solid #111827; padding-bottom: 6pt; }
+  .print-header h1 { font-size: 16pt; }
+  .print-header p { color: #4b5563; font-size: 9.5pt; }
+
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

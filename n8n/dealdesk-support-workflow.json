@@ -1,0 +1,155 @@
+{
+  "name": "DealDesk AI - Support Desk",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dealdesk-support",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "0d1f5c1e-6a3b-4f7e-9a51-2b8d7e3f1a01",
+      "name": "Support request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "5f0c3b2a-8d4e-4c1f-9b6a-dealdesk0001"
+    },
+    {
+      "parameters": {
+        "jsCode": "// DealDesk AI support desk.\n// 1. Uses the caller's own Supabase session (if signed in) so identity is verified by Supabase.\n// 2. Saves the ticket through create_support_ticket() (row level security still applies).\n// 3. Returns a short reply the voice/chat agent reads back to the customer.\nconst SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';\nconst SUPABASE_KEY = 'YOUR_PUBLISHABLE_KEY'; // public publishable key, safe to keep here\n\nconst req = $input.first().json;\nconst body = req.body ?? {};\nconst auth = (req.headers?.authorization ?? '').trim();\nconst escalate = body.action === 'escalate';\n\nconst headers = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' };\nif (/^Bearer\\s+\\S+/.test(auth)) headers.Authorization = auth;\n\nconst text = (v, max) => String(v ?? '').trim().slice(0, max);\nconst args = {\n  p_subject: text(body.subject, 200) || (escalate ? 'Customer asked for a person' : 'Support request'),\n  p_description: text(body.description ?? body.summary, 5000),\n  p_priority: ['low', 'normal', 'high', 'urgent'].includes(body.priority) ? body.priority : 'normal',\n  p_escalate: escalate,\n  p_channel: ['chat', 'voice', 'form'].includes(body.channel) ? body.channel : 'chat',\n  p_contact_name: text(body.contact_name, 120) || null,\n  p_contact_email: text(body.contact_email, 200) || null,\n  p_deal_id: /^[0-9a-f-]{36}$/i.test(body.deal_id ?? '') ? body.deal_id : null,\n  p_conversation_id: text(body.conversation_id, 200) || null,\n};\nif (args.p_subject.length < 3) args.p_subject = 'Support request';\n\nif (!args.p_description) {\n  return [{ json: { ok: false, status: 400, message: 'Please describe the problem so the team can help.' } }];\n}\n\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: SUPABASE_URL + '/rest/v1/rpc/create_support_ticket',\n  headers,\n  body: args,\n  json: true,\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true,\n});\n\nif (res.statusCode >= 300) {\n  const detail = typeof res.body === 'object' ? res.body?.message ?? JSON.stringify(res.body) : String(res.body);\n  const message =\n    res.statusCode === 401 ? 'Your session has expired. Sign in again, then try once more.'\n    : /contact email/i.test(detail) ? 'Please share an email address so the support team can reply to you.'\n    : 'The ticket could not be saved right now. Please try again in a moment.';\n  return [{ json: { ok: false, status: res.statusCode, message, detail } }];\n}\n\nconst t = Array.isArray(res.body) ? res.body[0] : res.body;\nconst ref = 'DD-' + t.ticket_number;\nconst escalated = t.status === 'escalated';\nreturn [{\n  json: {\n    ok: true,\n    ticket: ref,\n    ticket_number: t.ticket_number,\n    status: t.status,\n    priority: t.priority,\n    escalated,\n    organization: t.organization_name ?? 'Website visitor',\n    contact_name: t.contact_name ?? 'Unknown',\n    contact_email: t.contact_email ?? 'not provided',\n    subject: args.p_subject,\n    description: args.p_description,\n    channel: args.p_channel,\n    message: escalated\n      ? 'Ticket ' + ref + ' is now with the support team as urgent. A person will contact you shortly.'\n      : 'Ticket ' + ref + ' is open. The support team will follow up by email.',\n  },\n}];"
+      },
+      "id": "0d1f5c1e-6a3b-4f7e-9a51-2b8d7e3f1a02",
+      "name": "Save ticket in Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "0d1f5c1e-6a3b-4f7e-9a51-2b8d7e3f1a03",
+      "name": "Reply to agent",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "7b1d1a40-3c2e-4b8a-9f00-escalated0001",
+              "leftValue": "={{ $json.escalated }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0d1f5c1e-6a3b-4f7e-9a51-2b8d7e3f1a04",
+      "name": "Needs a person?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "support@yourcompany.com",
+        "subject": "=[DealDesk urgent] {{ $json.ticket }}: {{ $json.subject }}",
+        "emailType": "text",
+        "message": "=A customer asked to speak to a person.\n\nTicket: {{ $json.ticket }}\nFrom: {{ $json.contact_name }} <{{ $json.contact_email }}>\nOrganization: {{ $json.organization }}\nChannel: {{ $json.channel }}\n\nSummary:\n{{ $json.description }}\n\nReply to the customer within one business hour.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "0d1f5c1e-6a3b-4f7e-9a51-2b8d7e3f1a05",
+      "name": "Email support team",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        960,
+        -100
+      ]
+    }
+  ],
+  "connections": {
+    "Support request": {
+      "main": [
+        [
+          {
+            "node": "Save ticket in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save ticket in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Reply to agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply to agent": {
+      "main": [
+        [
+          {
+            "node": "Needs a person?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs a person?": {
+      "main": [
+        [
+          {
+            "node": "Email support team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
