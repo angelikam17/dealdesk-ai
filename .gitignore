@@ -12,3 +12,4 @@ skills-lock.json
 # Empty leftover folders from before the project
 dealdesk-ai/
 n8n/*.local.json
+.vercel
