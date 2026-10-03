@@ -388,8 +388,10 @@ function TicketFallback({ onClose }) {
           <form className="support-form" onSubmit={submit} noValidate>
             <p className="muted small">
               {WEBHOOK_URL
-                ? 'The live voice agent is not set up yet. Send a message and the team will reply by email.'
-                : 'Support is not connected yet. See docs/SUPPORT_SETUP.md to add the ElevenLabs agent and n8n webhook.'}
+                ? 'Live chat is unavailable right now. Send a message and the team will reply by email.'
+                : import.meta.env.DEV
+                  ? 'Support is not connected yet. Add VITE_ELEVENLABS_AGENT_ID and VITE_N8N_SUPPORT_WEBHOOK_URL (see docs/SUPPORT_SETUP.md).'
+                  : 'Support is temporarily unavailable. Please try again later.'}
             </p>
             {!signedIn && (
               <>
